@@ -1,6 +1,7 @@
 'use client'
 import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react';
+import useDebounce from './util/debounce';
 
 
 const Home = () => {
@@ -12,42 +13,48 @@ const Home = () => {
   const [currency, updateCurrency] = useState(currencyList[0]);
   const [amount, updateAmount] = useState(0)
   const [totalAmount, updateTotalAmount] = useState(0)
+  const debouncedInputVal = useDebounce(amount, 500)
 
   const intervalFetcher = useRef();
 
-  const getCurrentVal = async (currentCurrency, currentAmount) => {
-	if (fetching) return
-	console.log(currentCurrency)
+  const getCurrentVal = async (currentCurrency: string, currentAmount: number) => {
+    // prevent race conditions with fetching boolean
     updateFetching(true);
     const url = `https://api.frontendeval.com/fake/crypto/${currentCurrency.toLowerCase()}`
-    const res = await fetch(url);
-    let data;
+    let res
     try {
-      data = await res.json()
+      res = await fetch(url)
     } catch (e) {
       console.log(e)
     }
-	const curVal = data.value
-    console.log('something', typeof curVal, typeof currentAmount, currentAmount, curVal)
-    const totalVal = currentAmount * curVal
-    console.log(currentAmount, curVal, totalVal)
-    updateTotalAmount(totalVal)
-    updatePreviousWUCPrice(currentWUCPrice);
-    updateCurrentWUCPrice(curVal);
-    updateFetching(false);
-	console.count('getCurrentVal')
+    if (res) {
+      let data;
+      try {
+        data = await res.json()
+      } catch (e) {
+        console.log(e)
+      }
+      const curVal = data.value
+      const totalVal = currentAmount * curVal
+      updateTotalAmount(totalVal)
+      const differenceFromPreviousPrice = 
+      updatePreviousWUCPrice(currentWUCPrice);
+      updateCurrentWUCPrice(curVal);
+      updateFetching(false);
+    }
   }
 
-  const setIntervalFetcher = (currentCurrency, currentAmount) => {
+  const setIntervalFetcher = (currentCurrency: string, currentAmount: number) => {
     if (intervalFetcher.current) {
       clearInterval(intervalFetcher.current);
     }
-	try {
-		getCurrentVal(currentCurrency, currentAmount);
-	  } catch (e) {
-		console.log(e)
-	  }
+
     if (!fetching && currency) {
+      try {
+        getCurrentVal(currentCurrency, currentAmount);
+      } catch (e) {
+        console.log(e)
+      }
       intervalFetcher.current = setInterval(() => {
         if (!fetching) {
           try {
@@ -61,23 +68,26 @@ const Home = () => {
   }
 
   useEffect(() => {
-	  setIntervalFetcher(currency, amount)
-  },[])
-  
+    if (debouncedInputVal) {
+      setIntervalFetcher(currency, debouncedInputVal)
+    } else if (intervalFetcher.current && !debouncedInputVal) {
+      // cleanup if input is empty
+      clearInterval(intervalFetcher.current)
+    }
+  }, [debouncedInputVal])
+
   const handleCurrencyChange = ({ target: { value } }) => {
-	console.log('--------------------')
     updateCurrency(value);
-	setIntervalFetcher(value, amount)
+    setIntervalFetcher(value, amount)
   };
 
-  const handleAmountChange = ({ target: { value }}) => {
+  const handleAmountChange = ({ target: { value } }) => {
     updateAmount(value)
-	setIntervalFetcher(currency, value)
   }
-  console.log(currency)
+
   return (
     <div>
-      <input value={amount} type={"number"} onChange={e => handleAmountChange(e)}/>
+      <input value={amount} type={"number"} onChange={e => handleAmountChange(e)} />
       <select
         value={currency}
         onChange={(e) => handleCurrencyChange(e)}
