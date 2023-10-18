@@ -71,7 +71,7 @@ const Home = () => {
         if (!fetching) {
           updateRefreshNeeded(true);
         }
-      }, 5000);
+      }, 10000);
     }
   };
 
